@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>員工排班系統</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Arial',sans-serif;background:#f0f2f5;color:#222;font-size:13px}
+.app{max-width:1500px;margin:0 auto;padding:12px}
+h1{font-size:18px;font-weight:600;color:#1F3864;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.card{background:#fff;border-radius:8px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.card-title{font-size:12px;font-weight:600;color:#1F3864;margin-bottom:10px;padding-bottom:6px;border-bottom:1.5px solid #e8ecf0;text-transform:uppercase;letter-spacing:.5px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+.field label{display:block;font-size:11px;color:#666;margin-bottom:3px;font-weight:500}
+.field select,.field input{height:30px;padding:0 8px;border:1px solid #d0d5dd;border-radius:6px;font-size:12px;background:#fff;outline:none}
+.field select:focus,.field input:focus{border-color:#2F5496}
+.btn{height:32px;padding:0 14px;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-weight:500;transition:all .15s}
+.btn-primary{background:#1F3864;color:#fff}.btn-primary:hover{background:#162b4d}
+.btn-success{background:#0d7a4e;color:#fff}.btn-success:hover{background:#0a6040}
+.btn-info{background:#2F5496;color:#fff}.btn-info:hover{background:#243f7a}
+.tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500}
+.tag-課長{background:#FFF2CC;color:#7F6000}
+.tag-工讀{background:#E2EFDA;color:#375623}
+.tag-機動{background:#DDEBF7;color:#1F4E79}
+.quota-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.quota-section{border:1px solid #e8ecf0;border-radius:6px;padding:10px}
+.quota-section-title{font-size:12px;font-weight:600;margin-bottom:8px;color:#333}
+.quota-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px}
+.quota-val{font-weight:600;color:#1F3864;min-width:20px;text-align:center}
+/* 班表 */
+.sched-wrap{overflow-x:auto}
+table.sched{border-collapse:collapse;font-size:11px;white-space:nowrap}
+table.sched th{background:#2F5496;color:#fff;padding:4px 5px;text-align:center;min-width:34px;font-weight:500}
+table.sched th.sticky{position:sticky;left:0;z-index:3;min-width:72px;text-align:left;padding-left:8px}
+table.sched th.th-sun{background:#C06000}
+table.sched th.th-sat{background:#2F5496}
+table.sched th.th-hol{background:#C00000}
+table.sched th.th-hol-sub{background:#D46A00}
+table.sched td{border:1px solid #e0e4ea;height:26px;padding:0;text-align:center;vertical-align:middle}
+table.sched td.sticky{background:#f8f9fb;position:sticky;left:0;z-index:1;padding:0 6px;text-align:left;border-right:2px solid #b8c4d8;font-weight:500}
+table.sched td.cross{background:#edf0f4}
+table.sched td.sat{background:#EEF2FA}
+table.sched td.sun{background:#FDF5EC}
+table.sched td.hol{background:#FFF0EE}
+table.sched tr.period-row td{height:14px;font-size:10px;font-weight:500;color:#fff}
+table.sched tr.role-row td{background:#2d3e55;color:#fff;font-size:11px;font-weight:500;padding:2px 8px;text-align:left;height:18px}
+/* 假別 */
+.c{display:block;width:100%;height:100%}
+select.c{border:none;background:transparent;font-size:11px;text-align:center;font-weight:500;cursor:pointer;height:26px;font-family:Arial}
+select.c:focus{outline:2px solid #378ADD;outline-offset:-2px}
+select.c-例{background:#7DB356;color:#fff}
+select.c-休{background:#5B9BD5;color:#fff}
+select.c-國{background:#ED7D31;color:#fff}
+select.c-特{background:#9378C8;color:#fff}
+select.c-班{background:transparent;color:#666;font-size:10px}
+/* 統計 */
+table.stat{border-collapse:collapse;width:100%;font-size:12px}
+table.stat th{background:#1F3864;color:#fff;padding:5px 8px;text-align:center;font-weight:500}
+table.stat td{padding:4px 8px;border:1px solid #e0e4ea;text-align:center}
+table.stat tr:nth-child(even) td{background:#f7f9fb}
+table.stat td.name{text-align:left;font-weight:500}
+.num-例{color:#4a8a28;font-weight:600}
+.num-休{color:#1a5fa8;font-weight:600}
+.num-國{color:#c05000;font-weight:600}
+.num-特{color:#6040a0;font-weight:600}
+.num-total{color:#1F3864;font-weight:700}
+/* 狀態 */
+.alert{padding:8px 12px;border-radius:6px;font-size:12px;margin-bottom:10px}
+.alert-ok{background:#dff0d8;color:#2d6a1f;border-left:3px solid #5cb85c}
+.alert-warn{background:#fcf8e3;color:#8a6d3b;border-left:3px solid #f0ad4e}
+.alert-err{background:#f2dede;color:#a94442;border-left:3px solid #d9534f}
+/* 假日標記 */
+.hol-badge{display:inline-block;background:#FCE4D6;color:#843C00;border-radius:10px;padding:1px 6px;font-size:10px;margin:1px}
+</style>
+</head>
+<body>
+<div class="app">
+<h1>📅 員工排班系統</h1>
+
+<!-- 月份設定 -->
+<div class="card">
+  <div class="card-title">月份設定</div>
+  <div class="row">
+    <div class="field"><label>年份</label><select id="sel-year"><option value="2026">2026</option><option value="2027">2027</option></select></div>
+    <div class="field"><label>月份</label><select id="sel-month">
+      <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
+      <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
+      <option value="7" selected>7月</option><option value="8">8月</option><option value="9">9月</option>
+      <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+    </select></div>
+    <div id="hol-info" style="font-size:12px;color:#666;align-self:center"></div>
+  </div>
+</div>
+
+<!-- 配額資訊 -->
+<div class="card">
+  <div class="card-title">本月配額（自動計算）</div>
+  <div class="quota-grid">
+    <div class="quota-section">
+      <div class="quota-section-title"><span class="tag tag-課長">課長</span> 張瀚陽 / 游英傑</div>
+      <div id="quota-課長" style="font-size:12px;color:#555">載入中...</div>
+    </div>
+    <div class="quota-section">
+      <div class="quota-section-title"><span class="tag tag-機動">機動</span> 澤玄 / 國書 / 嘉賢 / 家華 / 裕祺</div>
+      <div id="quota-機動" style="font-size:12px;color:#555">載入中...</div>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:11px;color:#888">
+    ※ 例=當月週日數(課長)/節奏決定(機動)　休=當月週六數(課長)/節奏決定(機動)<br>
+    ※ 國=當月國定假日數，若例+休+國不足10天，自動多補「國」到達10天
+  </div>
+</div>
+
+<div class="row" style="margin-bottom:10px">
+  <button class="btn btn-primary" onclick="generate()">▶ 產出班表</button>
+  <button class="btn btn-success" id="btn-export" style="display:none" onclick="exportExcel()">⬇ 下載 Excel（儲存記錄）</button>
+  <button class="btn btn-info" id="btn-check" style="display:none" onclick="checkCache()">🔍 確認記錄狀態</button>
+  <span style="font-size:11px;color:#888;align-self:center">※ 若已有儲存記錄，產出時自動載入。點連結可強制重新排班。</span>
+</div>
+
+<div id="alert-area"></div>
+<div id="sched-area"></div>
+<div id="stat-area"></div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// 2026年國定假日（人事行政總處）
+// HOLIDAYS_MAIN：節日本日，計入配額（課長/機動的「國」）
+// HOLIDAYS_ALL：含補假/連假，工讀當天排班用
+// ══════════════════════════════════════════════
+const HOLIDAYS_MAIN = {
+  '2026-1-1':'元旦',
+  '2026-2-15':'小年夜',
+  '2026-2-16':'春節','2026-2-17':'春節','2026-2-18':'春節','2026-2-19':'春節','2026-2-20':'春節',
+  '2026-2-28':'和平紀念日',
+  '2026-4-4':'兒童節',
+  '2026-4-5':'清明節',
+  '2026-5-1':'勞動節',
+  '2026-6-19':'端午節',
+  '2026-9-25':'中秋節',
+  '2026-9-28':'教師節',
+  '2026-10-10':'國慶日',
+  '2026-10-25':'台灣光復節',
+  '2026-12-25':'行憲紀念日',
+};
+
+const HOLIDAYS_ALL = {
+  ...HOLIDAYS_MAIN,
+  // 補假/連假（工讀當天排班用，但不計入配額）
+  '2026-2-27':'和平紀念日補假',
+  '2026-4-3':'兒童節補假',
+  '2026-4-6':'清明節補假',
+  '2026-6-20':'端午節補假',
+  '2026-6-21':'端午節連假',
+  '2026-9-26':'中秋連假',
+  '2026-9-27':'中秋連假',
+  '2026-10-9':'國慶日補假',
+  '2026-10-11':'國慶日連假',
+  '2026-10-26':'台灣光復節補假',
+};
+
+// 向後相容
+const HOLIDAYS = HOLIDAYS_ALL;
+
+function hKey(y,m,d){ return `${y}-${m}-${d}`; }
+function isHol(y,m,d){ return !!HOLIDAYS_ALL[hKey(y,m,d)]; }      // 工讀判斷（含補假）
+function isHolMain(y,m,d){ return !!HOLIDAYS_MAIN[hKey(y,m,d)]; } // 配額計算（只本日）
+function holName(y,m,d){ return HOLIDAYS_ALL[hKey(y,m,d)]||''; }
+function dow(y,m,d){ return new Date(y,m-1,d).getDay(); } // 0=Sun
+function daysInMonth(y,m){ return new Date(y,m,0).getDate(); }
+
+// ══════════════════════════════════════════════
+// 配額自動計算
+// ══════════════════════════════════════════════
+function calcQuota(y,m){
+  let days=daysInMonth(y,m);
+  let sundays=0,saturdays=0,hols=0;
+  for(let d=1;d<=days;d++){
+    if(dow(y,m,d)===0) sundays++;
+    if(dow(y,m,d)===6) saturdays++;
+    if(isHolMain(y,m,d)) hols++;  // 只計本日，不含補假
+  }
+  // 課長
+  let ke={例:sundays, 休:saturdays, 國:hols};
+  // 機動：例休由節奏決定（做4休2），但國=當月國定數
+  // 例+休+國不足10天補特休
+  // 機動的例休需在排班後計算，先回傳國定數和10天最低要求
+  let ji={國:hols, 最低:10};
+  return {課長:ke, 機動:ji, 國定日數:hols, 週日數:sundays, 週六數:saturdays};
+}
+
+function updateQuotaDisplay(){
+  let y=parseInt(document.getElementById('sel-year').value);
+  let m=parseInt(document.getElementById('sel-month').value);
+  let q=calcQuota(y,m);
+  
+  document.getElementById('quota-課長').innerHTML=
+    `例 <b>${q.課長.例}</b> 天（週日數）　休 <b>${q.課長.休}</b> 天（週六數）　國 <b>${q.課長.國}</b> 天`;
+  // 機動國定配額需要在排班後才能精確計算（依節奏），這裡顯示最低保證
+  let holCount=q.國定日數;
+  // 做4休2每月大約例4-5 休4-5，預估最低國=max(國定數, 10-9)=max(國定數,1)
+  let minGuo=Math.max(holCount, 1);
+  document.getElementById('quota-機動').innerHTML=
+    `國定假日 <b>${holCount}</b> 天　例+休+國自動補至 <b>10</b> 天（不足補國定）`;
+  
+  // 顯示國定假日
+  let days=daysInMonth(y,m);
+  let holDays=[];
+  for(let d=1;d<=days;d++){
+    if(isHolMain(y,m,d)) holDays.push(`<span class="hol-badge">${m}/${d} ${holName(y,m,d)}</span>`);
+    else if(isHol(y,m,d)) holDays.push(`<span class="hol-badge" style="opacity:.6">${m}/${d} ${holName(y,m,d)}</span>`);
+  }
+  let holInfo=holDays.length>0?holDays.join(''):'本月無國定假日';
+  document.getElementById('hol-info').innerHTML=`國定假日：${holInfo}`;
+}
+
+// ══════════════════════════════════════════════
+// 員工資料
+// ══════════════════════════════════════════════
+const EMPS=[
+  {name:'張瀚陽',id:'H10240508',role:'課長',shift:'09:00-18:00'},
+  {name:'游英傑',id:'H10241014',role:'課長',shift:'08:00-17:00'},
+  {name:'蔡欣洋',id:'H10220122',role:'工讀',shift:'11:00-20:00'},
+  {name:'藍啟綸',id:'H10220809',role:'工讀',shift:'10:00-18:00'},
+  {name:'陳澤玄',id:'H10200203',role:'機動',shift:'10:00-20:00'},
+  {name:'黃國書',id:'H10240510',role:'機動',shift:'09:00-21:00'},
+  {name:'顏嘉賢',id:'H10230418',role:'機動',shift:'09:00-21:00'},
+  {name:'鄭家華',id:'H10230822',role:'機動',shift:'10:00-22:00'},
+  {name:'鄭裕祺',id:'H10250417',role:'機動',shift:'09:00-21:00'},
+];
+const SHIFTS={};
+EMPS.forEach(e=>SHIFTS[e.name]=e.shift);
+
+// 做4休2節奏起始點
+const RHYTHM={
+  '黃國書':[2026,5,7,2026,5,8],
+  '顏嘉賢':[2026,5,8,2026,5,9],
+  '鄭家華':[2026,5,6,2026,5,7],
+  '鄭裕祺':[2026,5,4,2026,5,5],
+};
+
+// ══════════════════════════════════════════════
+// 日期工具
+// ══════════════════════════════════════════════
+function dateKey(y,m,d){ return y*10000+m*100+d; }
+function fromKey(k){ return {y:Math.floor(k/10000),m:Math.floor((k%10000)/100),d:k%100}; }
+function addDays(y,m,d,n){ let dt=new Date(y,m-1,d+n); return {y:dt.getFullYear(),m:dt.getMonth()+1,d:dt.getDate()}; }
+function weekSunKey(y,m,d){ let wd=dow(y,m,d); let dt=new Date(y,m-1,d-wd); return dateKey(dt.getFullYear(),dt.getMonth()+1,dt.getDate()); }
+function lastSunOfPrevMonth(y,m){
+  let pm=m===1?12:m-1, py=m===1?y-1:y;
+  let last=new Date(py,pm,0);
+  while(last.getDay()!==0) last.setDate(last.getDate()-1);
+  return {y:last.getFullYear(),m:last.getMonth()+1,d:last.getDate()};
+}
+function getPeriods(y,m){
+  let start=lastSunOfPrevMonth(y,m);
+  let lastDay=daysInMonth(y,m);
+  let periods=[], cur={...start};
+  while(true){
+    let end=addDays(cur.y,cur.m,cur.d,13);
+    let sk=dateKey(cur.y,cur.m,cur.d);
+    if(sk>dateKey(y,m,lastDay)) break;
+    periods.push([{...cur},{...end}]);
+    cur=addDays(cur.y,cur.m,cur.d,14);
+    if(periods.length>8) break;
+  }
+  return periods;
+}
+function getFullRange(periods){
+  let first=periods[0][0], last=periods[periods.length-1][1];
+  let range=[], cur={...first};
+  while(dateKey(cur.y,cur.m,cur.d)<=dateKey(last.y,last.m,last.d)){
+    range.push({...cur, k:dateKey(cur.y,cur.m,cur.d)});
+    cur=addDays(cur.y,cur.m,cur.d,1);
+  }
+  return range;
+}
+
+// ══════════════════════════════════════════════
+// 排班邏輯
+// ══════════════════════════════════════════════
+let SC={}, CUR_PERIODS=[], CUR_MONTH_KEYS=[], CUR_FULL=[];
+
+function generate(forceRecalc=false){
+  let y=parseInt(document.getElementById('sel-year').value);
+  let m=parseInt(document.getElementById('sel-month').value);
+  
+  let periods=getPeriods(y,m);
+  let fullRange=getFullRange(periods);
+  let days=daysInMonth(y,m);
+  let monthKeys=[];
+  for(let d=1;d<=days;d++) monthKeys.push(dateKey(y,m,d));
+  CUR_PERIODS=periods; CUR_MONTH_KEYS=monthKeys; CUR_FULL=fullRange;
+
+  // 若已有當月儲存記錄，且非強制重排，直接載入
+  if(!forceRecalc){
+    let saved=localStorage.getItem(`sched_${y}_${m}`);
+    if(saved){
+      SC={};
+      EMPS.forEach(e=>SC[e.name]={});
+      let cache=JSON.parse(saved);
+      EMPS.forEach(e=>{
+        if(!cache[e.name]) return;
+        Object.entries(cache[e.name]).forEach(([k,v])=>{
+          SC[e.name][parseInt(k)]=v;
+        });
+      });
+      console.log(`✓ 載入 ${y}年${m}月 已儲存班表`);
+      showAlert([]);
+      renderTable(y,m,fullRange,periods);
+      renderStats(y,m,monthKeys);
+      document.getElementById('btn-export').style.display='';
+      document.getElementById('btn-check').style.display='';
+      document.getElementById('alert-area').innerHTML=
+        `<div class="alert alert-ok">✓ 已載入上次儲存的班表（含手動修改）　<a href="javascript:generate(true)" style="color:#2d6a1f;font-weight:600;text-decoration:underline">重新排班（清除修改）</a></div>`;
+      return;
+    }
+  }
+
+  let q=calcQuota(y,m);
+  SC={};
+  EMPS.forEach(e=>SC[e.name]={});
+  
+  // 從上月記憶讀取跨月日期
+  loadPrevMonthCache(y,m,fullRange,monthKeys);
+  
+  // ── 課長 ──────────────────────────────
+  let targetSun=q.課長.例, targetSat=q.課長.休, targetHol=q.課長.國;
+  
+  ['張瀚陽','游英傑'].forEach(nm=>{
+    let e=EMPS.find(x=>x.name===nm);
+    // 先排基礎
+    fullRange.forEach(({y:fy,m:fm,d:fd,k})=>{
+      let wd=dow(fy,fm,fd);
+      let code='班';
+      if(nm==='張瀚陽'){ if(wd===0)code='例'; else if(wd===1)code='休'; }
+      else { if(wd===5)code='例'; else if(wd===6)code='休'; }
+      if(!SC[nm][k]) SC[nm][k]={code,shift:e.shift};
+    });
+    // 例數超出→改班
+    let liDays=monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='例');
+    liDays.slice(targetSun).forEach(k=>SC[nm][k].code='班');
+    // 國定：瀚陽週二，英傑週四
+    if(targetHol>0){
+      let prefWd=nm==='張瀚陽'?2:4;
+      let need=targetHol;
+      monthKeys.filter(k=>{let{y:fy,m:fm,d:fd}=fromKey(k);return dow(fy,fm,fd)===prefWd&&SC[nm][k]&&SC[nm][k].code==='班';})
+        .forEach(k=>{ if(need>0){SC[nm][k].code='國';need--;} });
+      // 若不夠，從其他班日取
+      if(need>0) monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='班')
+        .forEach(k=>{ if(need>0){SC[nm][k].code='國';need--;} });
+    }
+  });
+  
+  // ── 工讀 ──────────────────────────────
+  ['蔡欣洋','藍啟綸'].forEach(nm=>{
+    let e=EMPS.find(x=>x.name===nm);
+    fullRange.forEach(({y:fy,m:fm,d:fd,k})=>{
+      if(SC[nm][k]) return; // 跨月記憶保留
+      let wd=dow(fy,fm,fd);
+      let hol=fm===m&&isHol(fy,fm,fd);  // 工讀：含補假都上班
+      let code;
+      if(wd===1)code='例';
+      else if(wd===0||wd===6)code='班';
+      else if(hol)code='班';
+      else code='休';
+      SC[nm][k]={code,shift:e.shift};
+    });
+  });
+  
+  // ── 澤玄 ──────────────────────────────
+  let nm='陳澤玄', e=EMPS.find(x=>x.name===nm);
+  fullRange.forEach(({y:fy,m:fm,d:fd,k})=>{
+    if(SC[nm][k]) return;
+    let wd=dow(fy,fm,fd);
+    let code=wd===5?'例':wd===1?'休':'班';
+    SC[nm][k]={code,shift:e.shift};
+  });
+  // 澤玄：例超出→改國，國超出→班日補
+  {
+    let liDays=monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='例');
+    let extraLi=liDays.length-targetSun; // 用課長例數相同（週日數）
+    // 澤玄是週五例，用週五數
+    let wuSun=monthKeys.filter(k=>{let{y:fy,m:fm,d:fd}=fromKey(k);return dow(fy,fm,fd)===5;}).length;
+    let extraLiZ=liDays.length-wuSun; // 通常=0，除非week5週五
+    let need=targetHol;
+    // 多的例→國
+    if(extraLiZ>0) liDays.slice(wuSun).forEach(k=>{if(need>0){SC[nm][k].code='國';need--;}});
+    // 再從班日補
+    if(need>0) monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='班')
+      .forEach(k=>{if(need>0){SC[nm][k].code='國';need--;}});
+  }
+  
+  // ── 機動4人：做4休2 ──────────────────
+  ['黃國書','顏嘉賢','鄭家華','鄭裕祺'].forEach(nm=>{
+    let e=EMPS.find(x=>x.name===nm);
+    let [ly,lm,ld,ry,rm,rd]=RHYTHM[nm];
+    let li={y:ly,m:lm,d:ld}, ri={y:ry,m:rm,d:rd};
+    let offMap={};
+    while(dateKey(li.y,li.m,li.d)<=CUR_FULL[CUR_FULL.length-1].k){
+      offMap[dateKey(li.y,li.m,li.d)]='例';
+      offMap[dateKey(ri.y,ri.m,ri.d)]='休';
+      li=addDays(li.y,li.m,li.d,6); ri=addDays(ri.y,ri.m,ri.d,6);
+    }
+    fullRange.forEach(({y:fy,m:fm,d:fd,k})=>{
+      if(SC[nm][k]) return; // 保留跨月記憶
+      SC[nm][k]={code:offMap[k]||'班',shift:e.shift};
+    });
+    
+    // 同週重複處理 + 國定分配
+    assignGuo(nm, monthKeys, fullRange, targetHol);
+    
+    // 計算例+休+國是否≥10，不足補特休
+    addToku(nm, monthKeys);
+  });
+  
+  // ※ 不在產出時儲存，等按下「下載Excel」才儲存最終版本
+  
+  // 驗證
+  let errors=validate(y,m,periods,monthKeys);
+  showAlert(errors);
+  
+  renderTable(y,m,fullRange,periods);
+  renderStats(y,m,monthKeys);
+  document.getElementById('btn-export').style.display='';
+  document.getElementById('btn-check').style.display='';
+}
+
+function assignGuo(nm, monthKeys, fullRange, guo_count){
+  let rule=nm==='黃國書'?'班':'特';
+  
+  // Step 1: 同週2例第2例→改休
+  findDups(nm,fullRange,monthKeys,'例').forEach(k=>SC[nm][k].code='休');
+  
+  // Step 2: 同週2休第2休→改國（該週仍需有休）
+  let need=guo_count;
+  findDups(nm,fullRange,monthKeys,'休').forEach(k=>{
+    if(need>0 && notAdjGuo(nm,k) && weekHasOther(nm,fullRange,k,'休')){
+      SC[nm][k].code='國'; need--;
+    }
+  });
+  
+  // Step 3: 剩下同週重複的→國書改班，其他改特
+  findDups(nm,fullRange,monthKeys,'休').forEach(k=>SC[nm][k].code=rule);
+  findDups(nm,fullRange,monthKeys,'例').forEach(k=>SC[nm][k].code=rule);
+  
+  // Step 4: 多的休→國（保持週有休）
+  if(need>0){
+    let restDays=monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='休');
+    let q_rest=monthKeys.filter(k=>{let{y:fy,m:fm,d:fd}=fromKey(k);return dow(fy,fm,fd)===6;}).length; // 估算
+    // 用更精確的：原始節奏應有的休數
+    let safe=restDays.filter(k=>notAdjGuo(nm,k)&&weekHasOther(nm,fullRange,k,'休'));
+    safe.sort((a,b)=>distToGuo(nm,monthKeys,a)-distToGuo(nm,monthKeys,b));
+    safe.forEach(k=>{if(need>0){SC[nm][k].code='國';need--;}});
+  }
+  
+  // Step 5: 多的例→國
+  if(need>0){
+    let liDays=monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='例');
+    let safe=liDays.filter(k=>notAdjGuo(nm,k)&&weekHasOther(nm,fullRange,k,'例'));
+    safe.sort((a,b)=>distToGuo(nm,monthKeys,a)-distToGuo(nm,monthKeys,b));
+    safe.forEach(k=>{if(need>0){SC[nm][k].code='國';need--;}});
+  }
+  
+  // Step 6: 班日補
+  if(need>0){
+    monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='班'&&notAdjGuo(nm,k))
+      .sort((a,b)=>distToGuo(nm,monthKeys,a)-distToGuo(nm,monthKeys,b))
+      .forEach(k=>{if(need>0){SC[nm][k].code='國';need--;}});
+  }
+  // Step 7: 放寬限制
+  if(need>0){
+    monthKeys.filter(k=>SC[nm][k]&&['班','休','例'].includes(SC[nm][k].code)&&notAdjGuo(nm,k))
+      .forEach(k=>{if(need>0){SC[nm][k].code='國';need--;}});
+  }
+}
+
+function addToku(nm, monthKeys){
+  let li=monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='例').length;
+  let rest=monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='休').length;
+  let guo=monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='國').length;
+  let total=li+rest+guo;
+
+  if(total<10){
+    // 不足10天：從班日補「國」
+    let need=10-total;
+    let candidates=monthKeys.filter(k=>{
+      let{y:fy,m:fm,d:fd}=fromKey(k);
+      return SC[nm][k]&&SC[nm][k].code==='班'&&dow(fy,fm,fd)!==0&&dow(fy,fm,fd)!==6;
+    });
+    candidates.sort((a,b)=>distToGuo(nm,monthKeys,a)-distToGuo(nm,monthKeys,b));
+    candidates.forEach(k=>{ if(need>0&&notAdjGuo(nm,k)){SC[nm][k].code='國';need--;} });
+    // 放寬限制
+    if(need>0) monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='班')
+      .forEach(k=>{if(need>0){SC[nm][k].code='國';need--;}});
+
+  } else if(total>10){
+    // 超過10天：多的先削休，再削例（國不動）
+    let excess=total-10;
+    // 先削多餘的休（每週至少仍需有1休）
+    let restDays=monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='休');
+    // 從後面削（離月底近的先改班）
+    restDays.slice().reverse().forEach(k=>{
+      if(excess<=0) return;
+      // 確保該週仍有其他休或國
+      let{y:fy,m:fm,d:fd}=fromKey(k);
+      let wk=weekSunKey(fy,fm,fd);
+      let weekHasOtherOff=CUR_FULL.some(({y:wy,m:wm,d:wd2,k:wk2})=>
+        wk2!==k && weekSunKey(wy,wm,wd2)===wk &&
+        SC[nm][wk2] && ['休','國'].includes(SC[nm][wk2].code)
+      );
+      if(weekHasOtherOff){ SC[nm][k].code='班'; excess--; }
+    });
+    // 再削多餘的例（每週至少仍需有1例或國）
+    if(excess>0){
+      let liDays=monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='例');
+      liDays.slice().reverse().forEach(k=>{
+        if(excess<=0) return;
+        let{y:fy,m:fm,d:fd}=fromKey(k);
+        let wk=weekSunKey(fy,fm,fd);
+        let weekHasOtherLi=CUR_FULL.some(({y:wy,m:wm,d:wd2,k:wk2})=>
+          wk2!==k && weekSunKey(wy,wm,wd2)===wk &&
+          SC[nm][wk2] && ['例','國'].includes(SC[nm][wk2].code)
+        );
+        if(weekHasOtherLi){ SC[nm][k].code='班'; excess--; }
+      });
+    }
+  }
+}
+
+// 輔助函數
+function findDups(nm, fullRange, monthKeys, code){
+  let byWeek={};
+  fullRange.forEach(({y,m,d,k})=>{
+    if(SC[nm][k]&&SC[nm][k].code===code){
+      let wk=weekSunKey(y,m,d);
+      if(!byWeek[wk]) byWeek[wk]=[];
+      byWeek[wk].push(k);
+    }
+  });
+  let dups=[];
+  Object.values(byWeek).forEach(days=>{
+    if(days.length>1) days.slice(1).forEach(k=>{ if(monthKeys.includes(k)) dups.push(k); });
+  });
+  return dups;
+}
+
+function notAdjGuo(nm,k){
+  let {y,m,d}=fromKey(k);
+  let prev=addDays(y,m,d,-1), next=addDays(y,m,d,1);
+  let pk=dateKey(prev.y,prev.m,prev.d), nk=dateKey(next.y,next.m,next.d);
+  return !(SC[nm][pk]&&SC[nm][pk].code==='國') && !(SC[nm][nk]&&SC[nm][nk].code==='國');
+}
+
+function weekHasOther(nm, fullRange, k, code){
+  let {y,m,d}=fromKey(k);
+  let wk=weekSunKey(y,m,d);
+  return fullRange.some(({y:fy,m:fm,d:fd,k:fk})=>fk!==k&&weekSunKey(fy,fm,fd)===wk&&SC[nm][fk]&&SC[nm][fk].code===code);
+}
+
+function distToGuo(nm, monthKeys, k){
+  let guos=monthKeys.filter(g=>SC[nm][g]&&SC[nm][g].code==='國');
+  if(!guos.length) return 999;
+  let {y:ky,m:km,d:kd}=fromKey(k);
+  return Math.min(...guos.map(g=>{let{y:gy,m:gm,d:gd}=fromKey(g);return Math.abs((new Date(ky,km-1,kd)-new Date(gy,gm-1,gd))/(864e5));}));
+}
+
+// ══════════════════════════════════════════════
+// 跨月記憶
+// ══════════════════════════════════════════════
+function saveCache(y,m){
+  // 儲存當月所有日期（含跨月週期日期）的最終班表
+  // 只存當月相關日期，key用字串確保JSON序列化正確
+  let cache={};
+  EMPS.forEach(e=>{
+    cache[e.name]={};
+    CUR_FULL.forEach(({k})=>{
+      if(SC[e.name][k]) cache[e.name][String(k)]=SC[e.name][k];
+    });
+    // 也儲存純當月日期
+    CUR_MONTH_KEYS.forEach(k=>{
+      if(SC[e.name][k]) cache[e.name][String(k)]=SC[e.name][k];
+    });
+  });
+  localStorage.setItem(`sched_${y}_${m}`, JSON.stringify(cache));
+  console.log(`✓ 已儲存 ${y}年${m}月班表，共${CUR_FULL.length}天`);
+}
+
+function loadPrevMonthCache(y,m,fullRange,monthKeys){
+  let py=m===1?y-1:y, pm=m===1?12:m-1;
+  let data=localStorage.getItem(`sched_${py}_${pm}`);
+  if(!data){
+    console.log(`找不到上月(${py}年${pm}月)班表記錄`);
+    return;
+  }
+  let cache=JSON.parse(data);
+  let loaded=0;
+  EMPS.forEach(e=>{
+    if(!cache[e.name]) return;
+    fullRange.forEach(({k})=>{
+      // 只填入跨月日期（不在當月內），用String(k)匹配
+      let val=cache[e.name][String(k)];
+      if(!monthKeys.includes(k) && val){
+        SC[e.name][k]=val;
+        loaded++;
+      }
+    });
+  });
+  console.log(`✓ 從上月(${py}年${pm}月)載入${loaded}個跨月日期`);
+}
+
+// ══════════════════════════════════════════════
+// 驗證
+// ══════════════════════════════════════════════
+function validate(y,m,periods,monthKeys){
+  let errors=[];
+  EMPS.filter(e=>e.role==='機動'||e.role==='課長').forEach(e=>{
+    let nm=e.name;
+    // 每週至少1例
+    let byWeek={};
+    monthKeys.forEach(k=>{
+      let{y:fy,m:fm,d:fd}=fromKey(k);
+      let wk=weekSunKey(fy,fm,fd);
+      if(!byWeek[wk]) byWeek[wk]={例:0,休:0,國:0};
+      let code=SC[nm][k]&&SC[nm][k].code;
+      if(code==='例') byWeek[wk].例++;
+      if(code==='休') byWeek[wk].休++;
+      if(code==='國') byWeek[wk].國++;
+    });
+    Object.entries(byWeek).forEach(([wk,cnt])=>{
+      // 每週至少有1個「例或休或國」
+      if(cnt.例+cnt.休+cnt.國===0) errors.push(`${nm} 某週無任何假別`);
+    });
+    // 每兩週期2例2休（含國）
+    periods.forEach((p,pi)=>{
+      let pd=[];
+      let cur={...p[0]};
+      while(dateKey(cur.y,cur.m,cur.d)<=dateKey(p[1].y,p[1].m,p[1].d)){
+        pd.push(dateKey(cur.y,cur.m,cur.d));
+        cur=addDays(cur.y,cur.m,cur.d,1);
+      }
+      let pLi=pd.filter(k=>SC[nm][k]&&['例','國'].includes(SC[nm][k].code)).length;
+      let pRest=pd.filter(k=>SC[nm][k]&&['休','國'].includes(SC[nm][k].code)).length;
+      if(pLi<2) errors.push(`${nm} 週期${pi+1}例假(含國)僅${pLi}天`);
+      if(pRest<2) errors.push(`${nm} 週期${pi+1}休息日(含國)僅${pRest}天`);
+    });
+  });
+  return errors;
+}
+
+// ══════════════════════════════════════════════
+// 渲染班表
+// ══════════════════════════════════════════════
+const CODE_OPTS=['班','例','休','國','特'];
+const P_COLORS=['#C00000','#2F5496','#1F6B3A','#7B4F9E','#0F6E56','#BA7517'];
+const DOW_N=['日','一','二','三','四','五','六'];
+
+function renderTable(y,m,fullRange,periods){
+  let wrap=document.getElementById('sched-area');
+  let html='<div class="card"><div class="card-title">班表</div><div class="sched-wrap"><table class="sched" id="sched-tbl">';
+  
+  // 日期標題行
+  html+='<thead><tr><th class="sticky">姓名</th>';
+  fullRange.forEach(({y:fy,m:fm,d:fd})=>{
+    let wd=dow(fy,fm,fd), hol=fm===m&&isHol(fy,fm,fd), cross=fm!==m;
+    let holMain=fm===m&&isHolMain(fy,fm,fd);
+    let holSub=fm===m&&isHol(fy,fm,fd)&&!holMain;
+    let cls=holMain?'th-hol':holSub?'th-hol-sub':wd===0?'th-sun':wd===6?'th-sat':'';
+    html+=`<th class="${cls}" style="${cross?'opacity:.6':''}">${fm}/${fd}<br><small>${DOW_N[wd]}</small></th>`;
+  });
+  html+='</tr>';
+  
+  // 週期行
+  html+='<tr class="period-row"><td class="sticky" style="background:#2d3e55;color:#aaa;font-size:10px">週期</td>';
+  fullRange.forEach(({y:fy,m:fm,d:fd,k})=>{
+    let pi=periods.findIndex(([ps,pe])=>k>=dateKey(ps.y,ps.m,ps.d)&&k<=dateKey(pe.y,pe.m,pe.d));
+    let bg=pi>=0?P_COLORS[pi%P_COLORS.length]:'#888';
+    let holMainTxt=fm===m&&isHolMain(fy,fm,fd)?holName(fy,fm,fd).slice(0,3):'';
+    let txt=holMainTxt||(pi>=0?`P${pi+1}`:'');
+    html+=`<td style="background:${bg}">${txt}</td>`;
+  });
+  html+='</tr></thead><tbody>';
+  
+  // 員工列
+  let prevRole=null;
+  EMPS.forEach(e=>{
+    if(e.role!==prevRole){
+      html+=`<tr class="role-row"><td colspan="${fullRange.length+1}">▌ ${e.role}</td></tr>`;
+      prevRole=e.role;
+    }
+    html+=`<tr><td class="sticky"><span class="tag tag-${e.role}">${e.name}</span></td>`;
+    fullRange.forEach(({y:fy,m:fm,d:fd,k})=>{
+      let wd=dow(fy,fm,fd), cross=fm!==m, hol=fm===m&&isHol(fy,fm,fd);
+      let holMain2=fm===m&&isHolMain(fy,fm,fd);
+      let cls=cross?'cross':holMain2?'hol':isHol(fy,fm,fd)&&fm===m?'hol':wd===0?'sun':wd===6?'sat':'';
+      let entry=SC[e.name][k]||{code:'班',shift:e.shift};
+      let opts=CODE_OPTS.map(opt=>`<option value="${opt}"${opt===entry.code?' selected':''}>${opt==='班'?entry.shift:opt}</option>`).join('');
+      html+=`<td class="${cls}"><select class="c c-${entry.code}" onchange="onCellChange('${e.name}',${k},this)">${opts}</select></td>`;
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table></div></div>';
+  wrap.innerHTML=html;
+}
+
+function onCellChange(nm,k,sel){
+  let old=SC[nm][k]||{};
+  SC[nm][k]={code:sel.value,shift:old.shift||SHIFTS[nm]};
+  sel.className=`c c-${sel.value}`;
+  // 重新計算統計
+  let y=parseInt(document.getElementById('sel-year').value);
+  let m=parseInt(document.getElementById('sel-month').value);
+  renderStats(y,m,CUR_MONTH_KEYS);
+  // ※ 按下「下載Excel」時才儲存最終版本
+}
+
+// ══════════════════════════════════════════════
+// 統計列
+// ══════════════════════════════════════════════
+function renderStats(y,m,monthKeys){
+  let html='<div class="card"><div class="card-title">本月統計</div><table class="stat"><thead><tr><th>姓名</th><th>職位</th><th>上班</th><th>例假</th><th>休息日</th><th>國定</th><th>特休</th><th>例+休+國</th></tr></thead><tbody>';
+  EMPS.forEach(e=>{
+    let nm=e.name;
+    let li=monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='例').length;
+    let rest=monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='休').length;
+    let guo=monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='國').length;
+    let toku=monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='特').length;
+    let work=monthKeys.filter(k=>SC[nm][k]&&SC[nm][k].code==='班').length;
+    let total=li+rest+guo;
+    let warnToku=toku>0?`style="background:#f0ecff"`:''
+    let status=total>=10?'✓':'⚠未達10天';
+    let statusStyle=total>=10?'color:#2d6a1f;font-weight:600':'color:#c00;font-weight:600';
+    html+=`<tr><td class="name"><span class="tag tag-${e.role}">${nm}</span></td><td>${e.role}</td><td>${work}</td><td class="num-例">${li}</td><td class="num-休">${rest}</td><td class="num-國">${guo}</td><td class="num-特">${toku}</td><td class="num-total">${total}</td><td style="${statusStyle}">${status}</td></tr>`;
+  });
+  html+='</tbody></table></div>';
+  document.getElementById('stat-area').innerHTML=html;
+}
+
+// ══════════════════════════════════════════════
+// 提示訊息
+// ══════════════════════════════════════════════
+function showAlert(errors){
+  let div=document.getElementById('alert-area');
+  if(errors.length===0){
+    div.innerHTML='<div class="alert alert-ok">✓ 排班合規，所有週期均符合勞基法規定</div>';
+  } else {
+    div.innerHTML=`<div class="alert alert-warn">⚠ 發現 ${errors.length} 個問題，請手動調整或查看：${errors.map(e=>`<br>• ${e}`).join('')}</div>`;
+  }
+}
+
+// ══════════════════════════════════════════════
+// Excel 下載（含手動修改後的最新資料）
+// ══════════════════════════════════════════════
+function checkCache(){
+  let y=parseInt(document.getElementById('sel-year').value);
+  let m=parseInt(document.getElementById('sel-month').value);
+  let data=localStorage.getItem(`sched_${y}_${m}`);
+  if(!data){
+    alert(`尚未儲存 ${y}年${m}月 的班表記錄。
+請先「下載Excel」來儲存。`);
+    return;
+  }
+  let cache=JSON.parse(data);
+  let count=Object.values(cache).reduce((s,v)=>s+Object.keys(v).length,0);
+  alert(`✓ ${y}年${m}月 班表記錄已存在
+共 ${count} 筆資料
+下個月排班時會自動帶入跨月日期`);
+}
+
+function exportExcel(){
+  let y=parseInt(document.getElementById('sel-year').value);
+  let m=parseInt(document.getElementById('sel-month').value);
+  
+  // 下載前儲存最終版本（含所有手動修改），供下個月跨月參考
+  saveCache(y,m);
+  
+  let DOW=['日','一','二','三','四','五','六'];
+  let rows=[['工號','姓名','職位',...CUR_FULL.map(({y:fy,m:fm,d:fd})=>`${fm}/${fd}(${DOW[dow(fy,fm,fd)]})`)]];
+  EMPS.forEach(e=>{
+    let row=[e.id,e.name,e.role];
+    CUR_FULL.forEach(({k})=>{
+      let entry=SC[e.name][k]||{code:'班',shift:e.shift};
+      row.push(entry.code==='班'?entry.shift:entry.code);
+    });
+    rows.push(row);
+  });
+  let wb=XLSX.utils.book_new();
+  let ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:13},{wch:9},{wch:7},...CUR_FULL.map(()=>({wch:9}))];
+  XLSX.utils.book_append_sheet(wb,ws,`${y}年${m}月排班表`);
+  XLSX.writeFile(wb,`排班表_${y}年${m}月.xlsx`);
+}
+
+// ══════════════════════════════════════════════
+// 初始化
+// ══════════════════════════════════════════════
+document.getElementById('sel-year').addEventListener('change',updateQuotaDisplay);
+document.getElementById('sel-month').addEventListener('change',updateQuotaDisplay);
+updateQuotaDisplay();
+</script>
+</body>
+</html>
